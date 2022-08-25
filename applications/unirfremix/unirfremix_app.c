@@ -93,6 +93,10 @@ typedef struct {
     int file_blank;
 
     string_t signal;
+
+    FuriThread* thread;
+    bool request_exit;
+    bool is_stop_running;
 } UniRFRemix;
 
 UniRFPreset* unirfremix_preset_alloc(void) {
@@ -117,34 +121,7 @@ static char* char_to_str(char* str, int i) {
 
     return converted;
 }
-/*
-static const char* int_to_char(int number) {
-    switch(number) {
-    case 0:
-        return "0";
-    case 1:
-        return "1";
-    case 2:
-        return "2";
-    case 3:
-        return "3";
-    case 4:
-        return "4";
-    case 5:
-        return "5";
-    case 6:
-        return "6";
-    case 7:
-        return "7";
-    case 8:
-        return "8";
-    case 9:
-        return "9";
-    default:
-        return "0";
-    }
-}
-*/
+
 //get filename without path
 static char* extract_filename(const char* name, int len) {
     string_t tmp;
@@ -443,7 +420,9 @@ void unirfremix_cfg_set_check(UniRFRemix* app, string_t file_name) {
 }
 
 static void unirfremix_end_send(UniRFRemix* app) {
+    FURI_LOG_D(TAG, "unirfremix_end_send");
     app->processing = 0;
+    view_port_update(app->view_port);
 }
 
 bool unirfremix_set_preset(UniRFPreset* p, const char* preset) {
@@ -585,13 +564,13 @@ bool unirfremix_save_protocol_to_file(FlipperFormat* fff_file, const char* dev_f
     return saved;
 }
 
-void unirfremix_tx_stop(UniRFRemix* app) {
+void unirfremix_worker_run(UniRFRemix* app) {
     if(app->processing == 0) {
         return;
     }
 
     if(!string_cmp_str(app->txpreset->protocol, "RAW")) {
-        while(!furi_hal_subghz_is_async_tx_complete()) {
+        while(!furi_hal_subghz_is_async_tx_complete() && !app->request_exit) {
             furi_delay_ms(15);
         }
     }
@@ -623,6 +602,21 @@ void unirfremix_tx_stop(UniRFRemix* app) {
     unirfremix_preset_free(app->txpreset);
     flipper_format_free(app->tx_fff_data);
     unirfremix_end_send(app);
+}
+
+// entrypoint for stop worker
+static int32_t unirfremix_worker_thread(void* ctx) {
+    UniRFRemix* app = ctx;
+    unirfremix_worker_run(app);
+    app->is_stop_running = false;
+    app->request_exit = false;
+    return 0;
+}
+
+void unirfremix_tx_stop(UniRFRemix* app) {
+    furi_assert(!app->is_stop_running);
+    app->is_stop_running = true;
+    furi_thread_start(app->thread);
 }
 
 static bool unirfremix_send_sub(UniRFRemix* app, FlipperFormat* fff_data) {
@@ -707,6 +701,7 @@ static void unirfremix_send_signal(UniRFRemix* app, Storage* storage, const char
     flipper_format_free(fff_file);
     if(!open_ok) {
         FURI_LOG_E(TAG, "Could not load file!");
+        unirfremix_end_send(app);
         return;
     }
 
@@ -816,6 +811,10 @@ static void render_callback(Canvas* canvas, void* ctx) {
         //canvas_draw_str_aligned(canvas, 125, 62, AlignRight, AlignBottom, int_to_char(app->repeat));
     }
 
+    if(app->is_stop_running) {
+        canvas_draw_str_aligned(canvas, 128 - 1, 64 - 1, AlignRight, AlignBottom, "Stopping...");
+    }
+
     furi_mutex_release(app->model_mutex);
 }
 
@@ -840,6 +839,13 @@ void unirfremix_subghz_alloc(UniRFRemix* app) {
         app->environment, EXT_PATH("subghz/assets/nice_flor_s"));
 
     app->subghz_receiver = subghz_receiver_alloc_init(app->environment);
+
+    // stop worker
+    app->thread = furi_thread_alloc();
+    furi_thread_set_name(app->thread, "UniRFRemix Stop Worker");
+    furi_thread_set_stack_size(app->thread, 2048);
+    furi_thread_set_context(app->thread, app);
+    furi_thread_set_callback(app->thread, unirfremix_worker_thread);
 }
 
 UniRFRemix* unirfremix_alloc(void) {
@@ -893,6 +899,8 @@ void unirfremix_free(UniRFRemix* app) {
     subghz_environment_free(app->environment);
 
     furi_record_close(RECORD_NOTIFICATION);
+
+    furi_thread_free(app->thread);
 
     free(app);
 }
@@ -1070,7 +1078,16 @@ int32_t unirfremix_app(void* p) {
                 break;
 
             case InputKeyBack:
-                unirfremix_tx_stop(app);
+                FURI_LOG_I(TAG, "Stopping App.");
+                if(app->processing != 0) {
+                    app->request_exit = true; // cancel sending
+                    if(!app->is_stop_running) {
+                        unirfremix_tx_stop(app);
+                    }
+                    if(app->is_stop_running && app->thread) {
+                        furi_thread_join(app->thread); // wait until thread is finished
+                    }
+                }
                 exit_loop = true;
                 break;
             }
