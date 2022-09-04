@@ -80,6 +80,8 @@ typedef struct {
     int32_t array_offset;
     int32_t list_offset;
 
+    bool skim_mode;
+
     const Icon* file_icon;
     bool hide_ext;
 } FileBrowserModel;
@@ -415,6 +417,14 @@ static void browser_draw_list(Canvas* canvas, FileBrowserModel* model) {
             model->item_cnt);
     }
 
+    if(model->skim_mode) {
+        canvas_set_color(canvas, ColorWhite);
+        canvas_draw_rbox(canvas, 64 - 16, 32 - 8, 32, 16, 2);
+        canvas_set_color(canvas, ColorBlack);
+        canvas_draw_rframe(canvas, 64 - 16, 32 - 8, 32, 16, 2);
+        canvas_draw_str_aligned(canvas, 64, 32, AlignCenter, AlignCenter, "Skim-Mode");
+    }
+
     string_clear(filename);
 }
 
@@ -433,15 +443,24 @@ static bool file_browser_view_input_callback(InputEvent* event, void* context) {
     furi_assert(browser);
     bool consumed = false;
     bool is_loading = false;
+    bool skim_mode = false;
 
     with_view_model(
         browser->view, (FileBrowserModel * model) {
             is_loading = model->folder_loading;
+            skim_mode = model->skim_mode;
             return false;
         });
 
     if(is_loading) {
         return false;
+    } else if(event->key == InputKeyRight) {
+        // toggle skim-mode
+        with_view_model(
+            browser->view, (FileBrowserModel * model) {
+                model->skim_mode = !skim_mode;
+                return true;
+            });
     } else if(event->key == InputKeyUp || event->key == InputKeyDown) {
         if(event->type == InputTypeShort || event->type == InputTypeRepeat) {
             with_view_model(
@@ -476,7 +495,14 @@ static bool file_browser_view_input_callback(InputEvent* event, void* context) {
             consumed = true;
         }
     } else if(event->key == InputKeyOk) {
-        if(event->type == InputTypeShort) {
+        // disable skim mode on OK
+        if(skim_mode) {
+            with_view_model(
+                browser->view, (FileBrowserModel * model) {
+                    model->skim_mode = false;
+                    return true;
+                });
+        } else if(event->type == InputTypeShort) {
             BrowserItem_t* selected_item = NULL;
             int32_t select_index = 0;
             with_view_model(
