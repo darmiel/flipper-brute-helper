@@ -84,6 +84,13 @@ void infrared_worker_rx_enable_blink_on_receiving(InfraredWorker* instance, bool
  */
 void infrared_worker_rx_enable_signal_decoding(InfraredWorker* instance, bool enable);
 
+/** Returns the state of signal decoding.
+ * 
+ * @param[in] instance - instance of InfraredWorker 
+ * @return true if signal decoding is enabled, false otherwise 
+ */
+bool infrared_worker_rx_is_signal_decoding_enabled(InfraredWorker* instance);
+
 /** Clarify is received signal either decoded or raw
  *
  * @param[in]   signal - received signal

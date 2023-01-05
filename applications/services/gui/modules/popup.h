@@ -19,6 +19,12 @@ typedef struct Popup Popup;
  */
 typedef void (*PopupCallback)(void* context);
 
+/** Popup input callback type
+ * @warning   comes from GUI thread
+ * @return   true if consumed, false if not
+ */
+typedef bool (*PopupInputCallback)(void* context, InputEvent* event);
+
 /** Allocate and initialize popup
  *
  * This popup used to ask simple questions like Yes/
@@ -47,6 +53,13 @@ View* popup_get_view(Popup* popup);
  * @param      callback  PopupCallback
  */
 void popup_set_callback(Popup* popup, PopupCallback callback);
+
+/** Set popup input callback
+ * 
+ * @param      popup     Popup instance
+ * @param      callback  PopupInputCallback
+ */
+void popup_set_input_callback(Popup* popup, PopupInputCallback callback);
 
 /** Set popup context
  *

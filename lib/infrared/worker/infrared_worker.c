@@ -322,6 +322,11 @@ void infrared_worker_rx_enable_signal_decoding(InfraredWorker* instance, bool en
     instance->decode_enable = enable;
 }
 
+bool infrared_worker_rx_is_signal_decoding_enabled(InfraredWorker* instance) {
+    furi_assert(instance);
+    return instance->decode_enable;
+}
+
 void infrared_worker_tx_start(InfraredWorker* instance) {
     furi_assert(instance);
     furi_assert(instance->state == InfraredWorkerStateIdle);

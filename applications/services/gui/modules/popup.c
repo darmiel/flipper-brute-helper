@@ -6,6 +6,7 @@ struct Popup {
     View* view;
     void* context;
     PopupCallback callback;
+    PopupInputCallback input_callback;
 
     FuriTimer* timer;
     uint32_t timer_period_in_ms;
@@ -80,6 +81,10 @@ static void popup_timer_callback(void* context) {
 static bool popup_view_input_callback(InputEvent* event, void* context) {
     Popup* popup = context;
     bool consumed = false;
+
+    if (popup->input_callback) {
+        consumed = popup->input_callback(popup->context, event);
+    }
 
     // Process key presses only
     if(event->type == InputTypeShort && popup->callback) {
@@ -162,6 +167,11 @@ View* popup_get_view(Popup* popup) {
 void popup_set_callback(Popup* popup, PopupCallback callback) {
     furi_assert(popup);
     popup->callback = callback;
+}
+
+void popup_set_input_callback(Popup* popup, PopupInputCallback callback) {
+    furi_assert(popup);
+    popup->input_callback = callback;
 }
 
 void popup_set_context(Popup* popup, void* context) {
@@ -251,6 +261,7 @@ void popup_reset(Popup* popup) {
         false);
     popup->callback = NULL;
     popup->context = NULL;
+    popup->input_callback = NULL;
     popup->timer_enabled = false;
     popup->timer_period_in_ms = 0;
 }
