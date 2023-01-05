@@ -2,11 +2,11 @@
 #include <dolphin/dolphin.h>
 
 void infrared_scene_learn_popup_update_text(Popup* popup, InfraredWorker* worker) {
-    FuriString* message = furi_string_alloc_printf(
-        "Point the remote at IR port\nand push the button.\nDecode: %s",
-        infrared_worker_rx_is_signal_decoding_enabled(worker) ? "AUTO" : "OFF");
-    popup_set_text(popup, furi_string_get_cstr(message), 5, 15, AlignLeft, AlignCenter);
-    furi_string_free(message);
+    if (infrared_worker_rx_is_signal_decoding_enabled(worker)) {
+        popup_set_text(popup, "Point the remote at IR port\nand push the button.\nDecode: AUTO", 5, 15, AlignLeft, AlignCenter);
+    } else {
+        popup_set_text(popup, "Point the remote at IR port\nand push the button.\nDecode: OFF", 5, 15, AlignLeft, AlignCenter);
+    }
 }
 
 bool infrared_scene_learn_popup_input_callback(void* context, InputEvent* event) {
